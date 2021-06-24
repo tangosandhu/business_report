@@ -1,0 +1,433 @@
+---
+title: "Final"
+author: "Tanveer Singh 4631615"
+date: "6/18/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Executive Summary
+
+Climate change has been a major problem and everyone has been affected by this problem in a way. Climate change has affected almost everyone who lives on this planet. Average temperature of earth has risen by *1.7* degree celcius since 1970 and is still on the rise.
+One of the main reason for climate change is **deforestation**. Deforestation refers to clearing of forests for other industrial or domestic purposes.About 38% of the habitable land is covered by the forests. Deforestation was initially seen as a way to modernize society where unused and infertile land was cleared to provide a space for more useful activities but eventually with the rise of industry and growing requirement, people have been thinking of deforestation as a way of survival with the growing demand.
+The data here provides a glimpse of the deforestation data. 
+This data clearly shows the current situation of deforestation around the entire world.The data clearly shows that the current rate of deforestation is highest in the **Brazil** which is followed by **Indonesia**. Land dedicated to forest in Brazil went from 13.7% to 12.8% and keeping in mind the area of the Brazil, the land lost to Brazil is in million hectares. That land loss is very significant and certain steps needed to be taken about it.
+
+The major reasons for deforestation across the world are *pasture* and *Oilseed* production. They both together account for almost 60% of the world's deforestation. Pasture includes activities like rearing, walking and feeding the cattle which is further exported for dairy and beef. Oilseed includes products like soy, palm oil, rapeseed, sesame etc. Out of these, major chunk of oilseed is dedicated to soy. Now it is a major misconception that soy is primarily used as a substitute for dairy. But, upon further probing the dataset it is evidently clear that 77% of the soy is used for processed products like vegetable oil. They are the major reason for production of soy.
+
+
+# Introduction
+
+According to WWF, the Earth loses 18.7 million acres of forests per year — equal to 27 soccer fields every minute. As well as providing habitats for countless endangered plants and animals, forests play a crucial role in the fight against climate change by acting as carbon sinks soaking up greenhouse gas emissions from the atmosphere. 
+In order to tackle deforestation, first it is important that the current trends of the deforestation are analyzed in detail in order to find an actionable course of action that needs to be taken in order to improve the current scenarios in regards to deforestation.
+
+# Exploration and Analysis
+
+## Installing the packages
+
+All the packages that were required in the entire document have been combined in this chunk in order to make it easier to be read and understand.
+
+```{r}
+library(tidytuesdayR)
+library(tidyverse)
+library(dplyr)
+library(lubridate)
+library(scales)
+library(ggplot2)
+library(skimr)
+library(tidytext)
+library(fuzzyjoin)
+library(ggthemes)
+library(tidymodels)
+library(maps)
+library(ranger)
+theme_set(theme_light())
+```
+
+
+## Importing the data
+
+The dataset provided was a group of 5 data sets and was imported using the *read_csv* command.
+In this data set:
+*forest_area* provides information on the total area that is dedicated to forests globally. 
+*forest* provides data of the net forest area that has been converted to be used for other purposes. 
+*brazil_loss* provides information on how much forest area is being lost to which activity.
+*soybean_use* provides information on where the soybean is being used industrially.
+*vegetable_oil* provides information on where the vegetable is being used.
+
+
+```{r Load}
+tt <- tt_load("2021-04-06")
+forest <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2021/2021-04-06/forest.csv')
+forest_area <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2021/2021-04-06/forest_area.csv')
+brazil_loss <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2021/2021-04-06/brazil_loss.csv')
+soybean_use <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2021/2021-04-06/soybean_use.csv')
+vegetable_oil <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2021/2021-04-06/vegetable_oil.csv')
+```
+
+
+After importing the datasets and in order to get a good idea as to what exactly is being told in the datasets,first few graphs were made. The graphs and the data very clearly pointed out that some of the data before the year *1992* was incomplete and since that would have hampered the results. Also, the dataset contained information like the continents so it was important to find a way in which there were only countries left in the dataset. Hence, the string length of 3 filtered the countries from other entries and a new data set was created *forest_area_country* which had all the countries and a complete data from the year 1992 and the forest area was converted to percentage for a better use.
+
+```{r}
+tt$forest %>%
+  count(entity, sort = TRUE) %>%
+  View()
+
+forest_area %>%
+  filter(entity == "Australia") %>%
+  ggplot(aes(year, forest_area)) +
+  geom_line() +
+  expand_limits(y = 0)
+forest_area_country <- tt$forest_area %>%
+  filter(str_length(code) == 3,
+         year >= 1992) %>%
+  rename(country = entity) %>%
+  mutate(forest_area = forest_area / 100)
+```
+
+After the first dataset was ready to give out information, the line first graph was plotted for some of the countries with considerable landmass and forest area.This graph showed that only Brazil had been loosing forest area over the years while other countries are either stable or increasing their forest areas. 
+
+```{r}
+forest <- tt$forest %>%
+  filter(str_length(code) == 3) %>%
+  rename(country = entity)
+
+forest_area_country %>%
+  filter(country %in% c("United States", "Canada", "China", "India",
+                        "Senegal", "Germany", "Brazil", "Poland", "Russia", "Indonesia")) %>%
+  mutate(country = fct_reorder(country, -forest_area)) %>%
+  ggplot(aes(year, forest_area, color = country)) +
+  geom_line() +
+  scale_y_continuous(labels = percent) +
+  expand_limits(y = 0) +
+  labs(x = "Year",
+       y = "% of global forest area")
+
+
+```
+
+After the very initial data wrangling, the dataset was explored further in contrast to the entire world where any country apart from the top 9 countries was put in 'others' and a area plot was created to have a better idea, keeping in mind the redflag raised by the initial line graph in regards to Brazil. And a table was created comparing the forest are in the year 1992 and 2020. These visualisations clearly showed that Brazil and Indonesia were the countries who have lost the highest forest area percentage in regards to their total area. Brazil's forest area came down from 13.8% to 12.7% across the years.
+
+
+```{r}
+forest_area_country %>%
+  mutate(country = fct_lump(country, 9, w = forest_area)) %>%
+  group_by(country, year) %>%
+  summarize(forest_area = sum(forest_area),
+            .groups = "drop") %>%
+  mutate(country = fct_reorder(country, -forest_area)) %>%
+  ggplot(aes(year, forest_area, fill = country)) +
+  geom_area() +
+  scale_y_continuous(labels = percent) +
+  expand_limits(y = 0) +
+  labs(x = "Year",
+       y = "% of global forest area")
+forest_area_country %>%
+  filter(year %in% c(1992, 2020)) %>%
+  mutate(year = paste0("forest_area_", year)) %>%
+  spread(year, forest_area) %>%
+  arrange(desc(forest_area_1992))
+```
+
+The model was built on the first data set to have a better idea. A linear model was used as to what exactly was the dataset trying to communicate. This data set clearly concluded that Brazil and Indonesia were loosing the highest forest land percent.
+
+```{r}
+#BUILDING A MODEL
+
+lm_spec<-linear_reg() %>% set_engine("lm")
+
+lm_fit<-lm_spec %>%
+  fit(forest_area ~ year * country, data = forest_area_country)
+
+tidy(lm_fit)
+
+new_points <- crossing(country = c("United States", "Canada", "China", "India",
+                        "Senegal", "Germany", "Brazil", "Poland", "Russia", "Indonesia"),
+                       year=1992:2020)
+augment(lm_fit, new_data = new_points) %>%
+  ggplot(aes(year, .pred, color = country)) +
+  geom_line(size = 1.2, alpha = 0.7) +
+  labs(labs(x = "NULLr",
+       y = "% of global forest area",
+       color = NULL))
+
+
+```
+
+After talking percentage, a further probe was done into the data that provided the net forest area lost. Upon having a look at the data of the last year recorded in the dataset i.e. 2015, it was evident that Brazil and Indonesia are the countries who have lost the most in terms of forest area.
+And a map was also created for better understanding based on the available data for the same year.
+
+```{r}
+forest %>%
+  group_by(year) %>%
+  summarize(net_forest_conversion = sum(net_forest_conversion))
+forest %>%
+  filter(year == 2015) %>%
+  arrange((net_forest_conversion)) %>%
+  slice_max(abs(net_forest_conversion), n = 20) %>%
+  mutate(country = fct_reorder(country, net_forest_conversion)) %>%
+  ggplot(aes(net_forest_conversion, country,
+             fill = net_forest_conversion > 0)) +
+  geom_col() +
+  scale_x_continuous(labels = comma) +
+  theme(legend.position = "none") +
+  labs(x = "Net change in forest in 2015 (hectares)",
+       y = "")
+
+country_data <- forest %>%
+  filter(year == 2015) %>%
+  inner_join(maps::iso3166, by = c(code = "a3"))
+
+map_data("world") %>%
+  as_tibble() %>%
+  filter(region != "Antarctica") %>%
+  regex_left_join(country_data, by = c(region = "mapname")) %>%
+  ggplot(aes(long, lat, group = group, fill = net_forest_conversion)) +
+  geom_polygon(color = "black", size = .05) +
+  scale_fill_gradient2(low = "red", high = "green",
+                       labels = comma) +
+  theme_map() +
+  labs(fill = "Net forest change (2015)")
+```
+
+Now, to have a look at the trends from the previous years a plot was created for 10 countries in different year. This plot showed that while there were countries like China, who were on the path of reforestation, Brazil was constantly on the path to deforestation. While the fores land lost by Brazil was significantly lower after the year 2000, but it was still highest loss of forest land. Brazil went from almost 4 million hectares of forest land lost in 1990 to 1.5 million hectares lost in 2015. Which was a very significant improvement but still there are a certain things that needed to be done. 
+
+After having a look at the years separately, all the years were combined to have a clear look at the relative trends for each of the countries. That graph clearly pointed that Brazil and Indonesia were among the countries with the highest negative change in forest area. this was a very concerning scenario. 
+
+```{r}
+
+
+forest %>%
+  group_by(year) %>%
+  slice_max(abs(net_forest_conversion), n = 10) %>%
+  ungroup() %>%
+  mutate(country = reorder_within(country, net_forest_conversion, year)) %>%
+  ggplot(aes(net_forest_conversion, country,
+             fill = net_forest_conversion > 0)) +
+  geom_col() +
+  facet_wrap(~ year, scales = "free_y") +
+  scale_x_continuous(label = comma) +
+  scale_y_reordered() +
+  theme(legend.position = "none") +
+  labs(x = "Net change in forest (hectares)",
+       y = "")
+forest %>%
+  mutate(country = fct_lump(country, 10, w = abs(net_forest_conversion))) %>%
+  group_by(country, year) %>%
+  summarize(net_forest_conversion = sum(net_forest_conversion),
+            .groups = "drop") %>%
+  mutate(country = fct_reorder(country, -net_forest_conversion)) %>%
+  ggplot(aes(year, net_forest_conversion, color = country)) +
+  geom_line() +
+  scale_y_continuous(labels = comma) +
+  labs(y = "Net change in forest (hectares)")
+
+
+```
+
+Now, after looking at the trends around the world, it was concerning that Brazil lost the most forest area. The dataset provided with the reasons for loss of forest land and it was concerning. Initally, the dataset was cleared to provide complete data and the main columns that showed the data for the land lost to which cause were identified. The data has been provided for 2001 all the to 2013.
+
+First a graph was created for the final year to see the which activity caused the most loss of land. It was evident that pasture has caused the most loss of land in the year 2013.
+
+```{r}
+brazil_loss <- tt$brazil_loss %>%
+  pivot_longer(commercial_crops:small_scale_clearing,
+               names_to = "cause",
+               values_to = "loss") %>%
+  mutate(cause = str_to_sentence(str_replace_all(cause, "_", " ")))
+brazil_loss %>%
+  filter(year == max(year)) %>%
+  arrange(desc(loss)) %>%
+  mutate(cause = fct_reorder(cause, loss)) %>%
+  ggplot(aes(loss, cause, color = cause)) +
+  geom_col() +
+  scale_x_continuous(labels = comma) +
+  labs(x = "Loss of forest in 2013 (hectares)",
+       y = "")
+
+```
+
+To have better idea of as to what this dataset is trying to convey, a line plot indicating the factor over the course of years was created to give a better idea of as to how much land has been lost to which activity.
+Also, an area plot was created to give a better idea of what the data was trying to convey. This data shows that pasture raising has been the reason for the most loss of land, which surpasses any other factor by a huge margin.
+
+
+```{r}
+brazil_loss %>%
+  mutate(cause = fct_reorder(cause, -loss)) %>%
+  ggplot(aes(year, loss, color = cause)) +
+  geom_line() +
+  scale_y_continuous(labels = comma) +
+  labs(y = "Loss of forest (hectares)",
+       x = "")
+brazil_loss %>%
+  mutate(cause = fct_lump(cause, 6, w = loss)) %>%
+  group_by(cause, year) %>%
+  summarize(loss = sum(loss), .groups = "drop") %>%
+  mutate(cause = fct_reorder(cause, loss)) %>%
+  ggplot(aes(year, loss, fill = cause)) +
+  geom_area() +
+  scale_y_continuous(labels = comma) +
+  labs(y = "Loss of forest (hectares)",
+       x = "")
+```
+
+The second reason for the most loss of land was small scale clearing that was done for plantation activities. Different reports clearly point out that Oilseed, in terms of plantation is a major reason for deforestation. This data shows as to how the vegetable oil is being used majorly in top 5 producers of vegetable oil. Now, this dataset clearly shows that majority of the vegetable oil is being concentrated.
+
+Two models were also created to have a better understanding. Lm model and a forest ranger model which was based on regression. In order to train these models, the dataset was split into two. vo_train contained the data that as used to train the model and vo_test contained the data that was used to test the model.
+
+For the linear regression model, the engine was set to LM for the better understanding of the data. 
+Upon testing the data and plotting the graph it showed an improved result in terms for plantation and use of small scale industry.
+
+Similar results were found upon testing the forest ranger model that showed the data was adequate and the error was not too high hence the results were considered acceptable.
+
+
+```{r}
+
+vegetable_oil <- tt$vegetable_oil %>%
+  rename(country = entity)
+
+vegetable_oil %>%
+  filter(!is.na(production)) %>%
+  mutate(crop_oil = fct_lump(crop_oil, 5, w = production)) %>%
+  group_by(country, crop_oil, year) %>%
+  summarize(production = sum(production)) %>%
+  filter(country %in% c("United States", "India", "China", "Indonesia", "Brazil")) %>%
+  ggplot(aes(year, production, fill = crop_oil)) +
+  geom_area() +
+  scale_y_continuous(labels = comma) +
+  facet_wrap(~ country)
+```
+
+```{r}
+vo<-vegetable_oil
+
+vo_df<-vo %>%
+  filter(!is.na(production)) %>%
+  select(production, year, country, crop_oil)
+ 
+vo_split<-vo_df %>%
+  initial_split()
+
+vo_train<-training(vo_split)
+vo_test<-testing(vo_split)
+
+vo_train1<-head(vo_train)
+vo_test1<-head(vo_test)
+```
+
+```{r}
+
+#model2: linear
+
+lm_spec<-linear_reg() %>%
+  set_engine(engine = "lm")
+
+lm_fit<-lm_spec %>%
+  fit(production ~ .,
+      data = vo_train)
+
+```
+
+```{r}
+#model3-regression model : ranger forest
+rf_spec<-rand_forest(mode = "regression") %>%
+  set_engine("ranger")
+
+rf_fit<-rf_spec %>%
+    fit(production ~ .,
+      data = vo_train)
+```
+
+
+```{r}
+
+
+results_train<-lm_fit %>%
+  predict(new_data = vo_train) %>%
+  mutate(truth = vo_train$production,
+         model = "lm") %>%
+  bind_rows(rf_fit %>%
+  predict(new_data = vo_train) %>%
+  mutate(truth = vo_train$production,
+         model = "rf"))
+
+results_test<-lm_fit %>%
+  predict(new_data = vo_test) %>%
+  mutate(truth = vo_test$production,
+         model = "lm") %>%
+  bind_rows(rf_fit %>%
+  predict(new_data = vo_test) %>%
+  mutate(truth = vo_test$production,
+         model = "rf"))
+
+
+```
+
+
+```{r}
+results_train %>%
+  group_by(model) %>%
+  rmse(truth = truth, estimate = .pred)
+
+```
+
+```{r}
+results_train %>%
+  mutate(train = "testing") %>%
+  bind_rows(results_train %>%
+              mutate(train = "training")) %>%
+  ggplot(aes(truth, .pred, color = model)) + 
+  geom_abline(lty = 2, color = "gray80") +
+  geom_point(alpha = 0.5) + 
+  facet_wrap(~truth)
+
+
+```
+
+
+
+Upon looking at the initial datasets, it is evident that soybean is being used for small scale plantations. Now, it is a common misconception that majority of the soybean is being used as a dairy supplement but this dataset shows that 77% of the soybean is being used for processed goods. 
+In order to explore the dataset, first it was filtered to just shows the countries and how much soybean is being produced thus causing them to clear the land to accomodate the demand.
+
+```{r}
+soybean_use <- tt$soybean_use %>%
+  filter(str_length(code) == 3) %>%
+  rename(country = entity) %>%
+  mutate(total = human_food + animal_feed + processed) %>%
+  pivot_longer(human_food:processed,
+               names_to = "use",
+               values_to = "amount") %>%
+  replace_na(list(amount = 0)) %>%
+  arrange(desc(total)) %>%
+  mutate(use = str_to_sentence(str_replace_all(use, "_", " ")))
+
+
+
+soybean_use %>%
+  filter(country %in% c("Brazil", "United States", "China", "Indonesia")) %>%
+  ggplot(aes(year, amount, fill = use)) +
+  geom_area() +
+  scale_y_continuous(labels = comma) +
+  labs(y = "Soybeans (tonnes)",
+       fill = "") +
+  facet_wrap(~ country)
+
+
+```
+
+It is evident from this dataset that Brazil and Indonesia were the major producers of soy and keeping in mind their areas respectively, it shows a very concerning state.
+
+
+# Conclusion
+
+The data provided narrates some concerning facts about the contry of Brazil and Indonesia. These countries have the highest forest clearing numbers. Both of these countries contribute to half of the world's deforestation and it is a very concerning number. Now, the data very clearly states that the major reason for deforestation in these countries is Pasture and small scale clearing for plantation. Plantations mostly include vegetable oils and upon looking further at the data set it was evident that majority of the oilseed was being used to make soy. With growing demand of the soy it is a misconception that soy is majorly being used as a substitute for dairy but in reality, 77% of the soy is being used for processed goods.
+
+
+## Recommendations
+
+In order to tackle such incidents, some of the precedents can be looked at. in the year 2006, Brazilian soy traders signed a memorandum (soyM) that prevented the traders to buy soy from the deforested land of Brazilian Amazon forest. This brought down the deforestation from 30% in 2004 to 1% in 2015. Similar initiatives and memorandums can be signed for various regions to follow such laws.
+Alternatives for other plantation based products can be looked into. As we are moving towards an advanced age, the basic use of paper has been decreased significantly but there are still way in which we can look into reducing the use further. Re-usable papers and paper made from recycled paper are few of the examples.
+Now with technological advancements, we should also look at finding an alternative for meat that provides similar nutritional value. Demand for meat is evergrowing and it is currently the biggest reason for deforestation. An alternative will go a long way in helping towards the goal of decreasing deforestation.
+
